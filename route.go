@@ -21,7 +21,7 @@ type Route struct {
 	// Underlying handler
 	preHandler http.Handler
 	// Wrappers
-	wrappers []func(http.Handler) http.Handler
+	wrappers func(http.Handler) http.Handler
 	// List of matchers.
 	matchers []matcher
 	// Manager for the variables from host and path.
@@ -104,8 +104,8 @@ func (r *Route) GetHandler() http.Handler {
 // ReWrap creates the handler by wrapping the prehandler with all wrappers
 func (r *Route) ReWrap() {
 	r.handler = r.preHandler
-	for _, w := range r.wrappers {
-		r.handler = w(r.handler)
+	if r.wrappers != nil {
+		r.handler = r.wrappers(r.handler)
 	}
 }
 
@@ -113,7 +113,14 @@ func (r *Route) ReWrap() {
 func (r *Route) Wrap(wrappers ...func(http.Handler) http.Handler) *Route {
 	if r.err == nil {
 		for _, w := range wrappers {
-			r.wrappers = append(r.wrappers, w)
+			if r.wrappers == nil {
+				r.wrappers = w
+			} else {
+				oldWrappers := r.wrappers
+				r.wrappers = func(h http.Handler) http.Handler {
+					return oldWrappers(w(h))
+				}
+			}
 		}
 		if r.preHandler != nil {
 			r.ReWrap()
