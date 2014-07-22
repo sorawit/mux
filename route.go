@@ -18,6 +18,10 @@ type Route struct {
 	parent parentRoute
 	// Request handler for the route.
 	handler http.Handler
+	// Underlying handler
+	preHandler http.Handler
+	// Wrappers
+	wrappers []func(http.Handler) http.Handler
 	// List of matchers.
 	matchers []matcher
 	// Manager for the variables from host and path.
@@ -81,7 +85,8 @@ func (r *Route) BuildOnly() *Route {
 // Handler sets a handler for the route.
 func (r *Route) Handler(handler http.Handler) *Route {
 	if r.err == nil {
-		r.handler = handler
+		r.preHandler = handler
+		r.ReWrap()
 	}
 	return r
 }
@@ -93,7 +98,28 @@ func (r *Route) HandlerFunc(f func(http.ResponseWriter, *http.Request)) *Route {
 
 // GetHandler returns the handler for the route, if any.
 func (r *Route) GetHandler() http.Handler {
-	return r.handler
+	return r.preHandler
+}
+
+// ReWrap creates the handler by wrapping the prehandler with all wrappers
+func (r *Route) ReWrap() {
+	r.handler = r.preHandler
+	for _, w := range r.wrappers {
+		r.handler = w(r.handler)
+	}
+}
+
+// Wrap wraps the route with the middleware(s).
+func (r *Route) Wrap(wrappers ...func(http.Handler) http.Handler) *Route {
+	if r.err == nil {
+		for _, w := range wrappers {
+			r.wrappers = append(r.wrappers, w)
+		}
+		if r.preHandler != nil {
+			r.ReWrap()
+		}
+	}
+	return r
 }
 
 // Name -----------------------------------------------------------------------

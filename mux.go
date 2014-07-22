@@ -40,6 +40,8 @@ type Router struct {
 	NotFoundHandler http.Handler
 	// Parent route, if this is a subrouter.
 	parent parentRoute
+	// Wrappers of this router
+	wrappers []func(http.Handler) http.Handler
 	// Routes to be matched, in order.
 	routes []*Route
 	// Routes by name for URL building.
@@ -54,6 +56,9 @@ type Router struct {
 func (r *Router) Match(req *http.Request, match *RouteMatch) bool {
 	for _, route := range r.routes {
 		if route.Match(req, match) {
+			for _, w := range r.wrappers {
+				match.Handler = w(match.Handler)
+			}
 			return true
 		}
 	}
@@ -174,6 +179,14 @@ func (r *Router) Handle(path string, handler http.Handler) *Route {
 func (r *Router) HandleFunc(path string, f func(http.ResponseWriter,
 	*http.Request)) *Route {
 	return r.NewRoute().Path(path).HandlerFunc(f)
+}
+
+// Wrappers wraps this router with the middleware(s)
+func (r *Router) Wrap(wrappers ...func(http.Handler) http.Handler) *Router {
+	for _, w := range wrappers {
+		r.wrappers = append(r.wrappers, w)
+	}
+	return r
 }
 
 // Headers registers a new route with a matcher for request header values.
